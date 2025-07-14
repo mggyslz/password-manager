@@ -11,9 +11,14 @@ def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 site TEXT NOT NULL,
                 username TEXT NOT NULL,
-                password TEXT NOT NULL
+                password TEXT NOT NULL,
+                category TEXT DEFAULT ''
             )
         """)
+        try:
+            conn.execute("ALTER TABLE passwords ADD COLUMN category TEXT DEFAULT ''")
+        except sqlite3.OperationalError:
+            pass
         init_settings_table()
         conn.commit()
 
@@ -27,17 +32,17 @@ def init_settings_table():
         """)
         conn.commit()
 
-def add_entry(site, username, encrypted_password):
+def add_entry(site, username, encrypted_password, category=""):
     with connect() as conn:
         conn.execute('''
-            INSERT INTO passwords (site, username, password)
-            VALUES (?, ?, ?)
-        ''', (site, username, encrypted_password))
+            INSERT INTO passwords (site, username, password, category)
+            VALUES (?, ?, ?, ?)
+        ''', (site, username, encrypted_password, category))
         conn.commit()
 
 def get_all_entries():
     with connect() as conn:
-        cur = conn.execute('SELECT id, site, username, password FROM passwords')
+        cur = conn.execute('SELECT id, site, username, password, category FROM passwords')
         return cur.fetchall()
 
 def update_entry_by_id(entry_id, new_encrypted_password):
@@ -76,5 +81,6 @@ def get_setting(key):
 
 def get_all_entries_raw():
     with connect() as conn:
-        cur = conn.execute('SELECT site, username, password FROM passwords')
+        cur = conn.execute('SELECT site, username, password, category FROM passwords')
         return cur.fetchall()
+

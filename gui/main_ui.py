@@ -14,7 +14,7 @@ class PasswordManagerApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Password Manager")
-        self.root.geometry("600x600")
+        self.root.geometry("700x700")
         self.root.resizable(False, False)
 
         db_manager.init_db()
@@ -52,19 +52,24 @@ class PasswordManagerApp:
         self.username_entry = tk.Entry(input_frame, font=entry_font, width=40)
         self.password_entry = tk.Entry(input_frame, font=entry_font, width=40)
 
+        tk.Label(input_frame, text="Category:", font=label_font).grid(row=3, column=0, sticky="e", padx=5, pady=5)
+        self.category_entry = ttk.Combobox(input_frame, values=["", "Work", "Personal", "Finance", "Social", "Email", "Other"], state="readonly", width=37)
+        self.category_entry.grid(row=3, column=1, pady=5)
+
+
         self.site_entry.grid(row=0, column=1, pady=5)
         self.username_entry.grid(row=1, column=1, pady=5)
         self.password_entry.grid(row=2, column=1, pady=5)
 
         self.strength_label = tk.Label(input_frame, text="", font=("Segoe UI", 9, "italic"))
-        self.strength_label.grid(row=3, column=1, sticky="w", padx=5, pady=(0, 2))
+        self.strength_label.grid(row=4, column=1, sticky="w", padx=5, pady=(0, 2))
 
         self.password_entry.bind("<KeyRelease>", self.check_password_strength)
 
 
         # Generate Password Button
         tk.Button(input_frame, text="Generate Password", width=20, command=self.handle_generate_password)\
-            .grid(row=4, column=1, sticky="w", padx=5, pady=(0, 10))
+            .grid(row=5, column=1, sticky="w", padx=5, pady=(0, 10))
 
         
         # Buttons
@@ -91,6 +96,14 @@ class PasswordManagerApp:
         search_entry = tk.Entry(search_frame, textvariable=self.search_var, font=("Segoe UI", 10), width=30)
         search_entry.pack(side="left", padx=5)
         search_entry.bind("<KeyRelease>", self.handle_search)
+        
+        # Filter DropDown
+        tk.Label(search_frame, text="Filter by Category:", font=label_font).pack(side="left", padx=5)
+
+        self.category_filter = ttk.Combobox(search_frame, values=[], state="readonly")
+        self.category_filter.pack(side="left")
+        self.category_filter.bind("<<ComboboxSelected>>", self.handle_search)
+
 
         # Listbox
         list_frame = tk.Frame(self.root, padx=10, pady=5)
@@ -121,9 +134,10 @@ class PasswordManagerApp:
         site = self.site_entry.get()
         username = self.username_entry.get()
         password = self.password_entry.get()
+        category = self.category_entry.get()
         if site and username and password:
             encrypted_pw = encryption.encrypt_password(self.fernet, password)
-            db_manager.add_entry(site, username, encrypted_pw)
+            db_manager.add_entry(site, username, encrypted_pw, category)
             self.refresh_list()
             self.clear_fields()
         else:
@@ -136,18 +150,19 @@ class PasswordManagerApp:
         new_site = self.site_entry.get()
         new_username = self.username_entry.get()
         new_password = self.password_entry.get()
+        new_category = self.category_entry.get()
 
         if not new_site or not new_username or not new_password:
             return messagebox.showwarning("Input error", "All fields must be filled out.")
 
         encrypted_pw = encryption.encrypt_password(self.fernet, new_password)
-        
-        # You might already have this function, or need to write it
-        db_manager.update_full_entry(self.selected_entry_id, new_site, new_username, encrypted_pw)
+
+        # Update full entry with category
+        db_manager.update_full_entry(self.selected_entry_id, new_site, new_username, encrypted_pw, new_category)
 
         self.refresh_list()
         self.clear_fields()
-        self.selected_entry_id = None  # reset after updating
+        self.selected_entry_id = None
 
 
     def delete_entry(self):
@@ -166,17 +181,33 @@ class PasswordManagerApp:
     def refresh_list(self):
         self.entries = db_manager.get_all_entries()
         self.listbox.delete(0, tk.END)
+        
+        categories = set()  # For the category dropdown
+
         for entry in self.entries:
-            entry_id, site, username, encrypted_pw = entry
+            try:
+                entry_id, site, username, encrypted_pw, category = entry
+            except ValueError:
+                # Fallback for entries without category
+                entry_id, site, username, encrypted_pw = entry
+                category = ""
+
             decrypted_pw = encryption.decrypt_password(self.fernet, encrypted_pw)
-            self.listbox.insert(tk.END, f"[{entry_id}] {site:<15} | {username:<20} | {decrypted_pw}")
+            self.listbox.insert(
+                tk.END, 
+                f"[{entry_id}] {site:<15} | {username:<20} | {decrypted_pw:<20} | {category}"
+            )
+            categories.add(category)
+
+        if hasattr(self, 'category_filter'):
+            self.category_filter['values'] = [""] + sorted(c for c in categories if c)
 
     def on_select(self, event):
         selected = self.listbox.curselection()
         if not selected:
             return
         index = selected[0]
-        entry_id, site, username, encrypted_pw = self.entries[index]
+        entry_id, site, username, encrypted_pw, category = self.entries[index]
         decrypted_pw = encryption.decrypt_password(self.fernet, encrypted_pw)
         self.site_entry.delete(0, tk.END)
         self.site_entry.insert(0, site)
@@ -186,6 +217,8 @@ class PasswordManagerApp:
         self.password_entry.insert(0, decrypted_pw)
         
         self.selected_entry_id = entry_id
+        self.category_entry.delete(0, tk.END)
+        self.category_entry.insert(0, category)
 
     def clear_fields(self):
         self.site_entry.delete(0, tk.END)
@@ -276,10 +309,11 @@ class PasswordManagerApp:
     def handle_search(self, event=None):
         query = self.search_var.get().lower()
         filtered = []
+        filter_value = self.category_filter.get().lower()
 
         for entry in self.entries:
-            entry_id, site, username, encrypted_pw = entry
-            if query in site.lower() or query in username.lower():
+            entry_id, site, username, encrypted_pw, category = entry
+            if (query in site.lower() or query in username.lower()) and (filter_value == "" or filter_value == category.lower()):
                 decrypted_pw = encryption.decrypt_password(self.fernet, encrypted_pw)
                 filtered.append((entry_id, site, username, decrypted_pw))
 
@@ -453,13 +487,15 @@ class PasswordManagerApp:
         f = encryption.get_fernet(encryption.derive_fernet_key_from_password(password))
 
         export_data = []
-        for site, username, enc_pw in entries:
+        for entry in entries:
             try:
+                site, username, enc_pw, category = entry
                 decrypted_pw = encryption.decrypt_password(self.fernet, enc_pw)
                 data = {
                     "site": site,
                     "username": username,
-                    "password": f.encrypt(decrypted_pw.encode()).decode()
+                    "password": f.encrypt(decrypted_pw.encode()).decode(),
+                    "category": category
                 }
                 export_data.append(data)
             except Exception as e:
@@ -470,6 +506,7 @@ class PasswordManagerApp:
             with open(path, "w", encoding="utf-8") as file:
                 json.dump(export_data, file, indent=2)
             messagebox.showinfo("Success", f"Vault exported to {path}")
+
 
     def import_vault(self):
         password = simpledialog.askstring("Decrypt Import", "Enter master password to decrypt vault:", show="*")
@@ -492,17 +529,14 @@ class PasswordManagerApp:
         success_count = 0
         for entry in data:
             try:
-                print(f"Trying entry: {entry}")
-                site = entry["site"]
-                username = entry["username"]
-                encrypted_pw = entry["password"]
+                site = entry.get("site")
+                username = entry.get("username")
+                encrypted_pw = entry.get("password")
+                category = entry.get("category", "")
 
                 decrypted_pw = f.decrypt(encrypted_pw.encode()).decode()
-                print(f"[OK] Decrypted: {decrypted_pw}")
-
                 re_encrypted = encryption.encrypt_password(self.fernet, decrypted_pw)
-                db_manager.add_entry(site, username, re_encrypted)
-
+                db_manager.add_entry(site, username, re_encrypted, category)
                 success_count += 1
             except Exception as e:
                 print(f"[!] Skipped invalid entry: {e}")
@@ -510,6 +544,7 @@ class PasswordManagerApp:
         self.refresh_list()
         messagebox.showinfo("Imported", f"Successfully imported {success_count} entries.")
 
+        
 
 
 
