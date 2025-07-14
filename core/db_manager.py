@@ -73,3 +73,8 @@ def get_setting(key):
         cur = conn.execute('SELECT value FROM settings WHERE key = ?', (key,))
         row = cur.fetchone()
         return row[0] if row else None
+
+def get_all_entries_raw():
+    with connect() as conn:
+        cur = conn.execute('SELECT site, username, password FROM passwords')
+        return cur.fetchall()

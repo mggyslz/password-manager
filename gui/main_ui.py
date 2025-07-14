@@ -1,10 +1,14 @@
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import messagebox, ttk, filedialog, simpledialog
 from core import db_manager, encryption, auth
+from core.auth import hash_password
 import config
 import time
 import threading
 from pynput import keyboard
+import json
+import hashlib
+import base64
 
 class PasswordManagerApp:
     def __init__(self, root):
@@ -66,10 +70,15 @@ class PasswordManagerApp:
         # Buttons
         button_frame = tk.Frame(self.root, pady=10)
         button_frame.pack(fill="x")
+        settings_frame = tk.Frame(self.root, pady=5)
+        settings_frame.pack()
 
         tk.Button(button_frame, text="Add", width=10, command=self.add_entry).pack(side="left", padx=15)
         tk.Button(button_frame, text="Update", width=10, command=self.update_entry).pack(side="left", padx=15)
         tk.Button(button_frame, text="Delete", width=10, command=self.delete_entry).pack(side="left", padx=15)
+        tk.Button(settings_frame, text="Export Vault", width=25, command=self.export_vault).pack(pady=2)
+        tk.Button(settings_frame, text="Import Vault", width=25, command=self.import_vault).pack(pady=2)
+
 
         ttk.Separator(self.root, orient="horizontal").pack(fill="x", padx=10, pady=5)
         
@@ -258,7 +267,7 @@ class PasswordManagerApp:
         import threading, time, pyperclip
 
         def clear_clipboard():
-            time.sleep(15)
+            time.sleep(20)
             pyperclip.copy("")
             print("Clipboard cleared.")
 
@@ -432,6 +441,78 @@ class PasswordManagerApp:
 
         popup.grab_set()
         site_entry.focus()
+
+    def export_vault(self):
+        entries = db_manager.get_all_entries_raw()
+        password = simpledialog.askstring("Encrypt Export", "Enter master password:", show="*")
+
+        if not password or not auth.verify_password(password, auth.load_master()):
+            messagebox.showerror("Error", "Incorrect master password.")
+            return
+
+        f = encryption.get_fernet(encryption.derive_fernet_key_from_password(password))
+
+        export_data = []
+        for site, username, enc_pw in entries:
+            try:
+                decrypted_pw = encryption.decrypt_password(self.fernet, enc_pw)
+                data = {
+                    "site": site,
+                    "username": username,
+                    "password": f.encrypt(decrypted_pw.encode()).decode()
+                }
+                export_data.append(data)
+            except Exception as e:
+                print(f"[!] Skipped during export: {e}")
+
+        path = filedialog.asksaveasfilename(defaultextension=".json", filetypes=[("JSON files", "*.json")])
+        if path:
+            with open(path, "w", encoding="utf-8") as file:
+                json.dump(export_data, file, indent=2)
+            messagebox.showinfo("Success", f"Vault exported to {path}")
+
+    def import_vault(self):
+        password = simpledialog.askstring("Decrypt Import", "Enter master password to decrypt vault:", show="*")
+        if not password:
+            return
+
+        f = encryption.get_fernet(encryption.derive_fernet_key_from_password(password))
+
+        file_path = filedialog.askopenfilename(filetypes=[("JSON files", "*.json")])
+        if not file_path:
+            return
+
+        with open(file_path, "r", encoding="utf-8") as f_in:
+            try:
+                data = json.load(f_in)
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to load file: {e}")
+                return
+
+        success_count = 0
+        for entry in data:
+            try:
+                print(f"Trying entry: {entry}")
+                site = entry["site"]
+                username = entry["username"]
+                encrypted_pw = entry["password"]
+
+                decrypted_pw = f.decrypt(encrypted_pw.encode()).decode()
+                print(f"[OK] Decrypted: {decrypted_pw}")
+
+                re_encrypted = encryption.encrypt_password(self.fernet, decrypted_pw)
+                db_manager.add_entry(site, username, re_encrypted)
+
+                success_count += 1
+            except Exception as e:
+                print(f"[!] Skipped invalid entry: {e}")
+
+        self.refresh_list()
+        messagebox.showinfo("Imported", f"Successfully imported {success_count} entries.")
+
+
+
+
 
 
 
