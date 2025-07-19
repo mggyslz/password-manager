@@ -7,12 +7,14 @@ from core import auth, db_manager
 
 db_manager.init_db()
 
+# ======== lOG IN ========
 def show_login():
     login_root = tk.Tk()
     login = LoginWindow(login_root)
     login_root.mainloop()
     return login.result
 
+# ======== SETTING MASTER PASSWORD ========
 def prompt_master_password():
     if not auth.is_master_set():
         # First time setup
@@ -30,7 +32,7 @@ def prompt_master_password():
                 return True
     else:
         return show_login()
-
+# ======== MAIN ========
 if __name__ == "__main__":
     if prompt_master_password():
         root = tk.Tk()

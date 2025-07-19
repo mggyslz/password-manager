@@ -9,7 +9,9 @@ from pynput import keyboard
 import json
 import hashlib
 import base64
+import pyperclip
 
+# ======== PASSWORD MANAGER CLASS ========
 class PasswordManagerApp:
     def __init__(self, root):
         self.root = root
@@ -35,7 +37,7 @@ class PasswordManagerApp:
         # Start idle checking loop
         self.check_idle()
 
-
+# ======== UI BUILD ========
     def build_ui(self):
         label_font = ("Segoe UI", 10, "bold")
         entry_font = ("Segoe UI", 10)
@@ -129,7 +131,7 @@ class PasswordManagerApp:
         settings_frame.pack()
         tk.Button(settings_frame, text="Change Master Password", width=25, command=self.change_master_password).pack()
 
-
+# ======== ACTIONS ========
     def add_entry(self):
         site = self.site_entry.get()
         username = self.username_entry.get()
@@ -164,7 +166,7 @@ class PasswordManagerApp:
         self.clear_fields()
         self.selected_entry_id = None
 
-
+# ======== ACTIONS ========
     def delete_entry(self):
         selected = self.listbox.curselection()
         if not selected:
@@ -177,7 +179,8 @@ class PasswordManagerApp:
             db_manager.delete_entry_by_id(entry_id)
             self.refresh_list()
             self.clear_fields()
-
+            
+# ======== REFRESH ========
     def refresh_list(self):
         self.entries = db_manager.get_all_entries()
         self.listbox.delete(0, tk.END)
@@ -201,7 +204,8 @@ class PasswordManagerApp:
 
         if hasattr(self, 'category_filter'):
             self.category_filter['values'] = [""] + sorted(c for c in categories if c)
-
+            
+# ======== ON SELECT ========
     def on_select(self, event):
         selected = self.listbox.curselection()
         if not selected:
@@ -224,7 +228,7 @@ class PasswordManagerApp:
         self.site_entry.delete(0, tk.END)
         self.username_entry.delete(0, tk.END)
         self.password_entry.delete(0, tk.END)
-        
+# ======== GENERATE STRONG PASSWORD ========        
     def handle_generate_password(self):
         import string, random
 
@@ -257,7 +261,7 @@ class PasswordManagerApp:
 
         self.password_entry.delete(0, tk.END)
         self.password_entry.insert(0, final_password)
-
+# ======== COPY USERNAME ========
     def copy_selected_username(self):
         import pyperclip
         import threading, time
@@ -275,10 +279,8 @@ class PasswordManagerApp:
         print(f"Username copied: {username}")
 
         self._start_clipboard_clear_timer()
-
+# ======== COPY PASSWORD ========
     def copy_selected_password(self):
-        import pyperclip
-        import threading, time
 
         selected = self.listbox.curselection()
         if not selected:
@@ -305,7 +307,7 @@ class PasswordManagerApp:
             print("Clipboard cleared.")
 
         threading.Thread(target=clear_clipboard, daemon=True).start()
-
+# ======== SEARCH ========
     def handle_search(self, event=None):
         query = self.search_var.get().lower()
         filtered = []
@@ -475,7 +477,7 @@ class PasswordManagerApp:
 
         popup.grab_set()
         site_entry.focus()
-
+# ======== EXPORT VAULT ========
     def export_vault(self):
         entries = db_manager.get_all_entries_raw()
         password = simpledialog.askstring("Encrypt Export", "Enter master password:", show="*")
@@ -506,8 +508,7 @@ class PasswordManagerApp:
             with open(path, "w", encoding="utf-8") as file:
                 json.dump(export_data, file, indent=2)
             messagebox.showinfo("Success", f"Vault exported to {path}")
-
-
+# ======== IMPORT VAULT ========
     def import_vault(self):
         password = simpledialog.askstring("Decrypt Import", "Enter master password to decrypt vault:", show="*")
         if not password:
