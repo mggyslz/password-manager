@@ -55,7 +55,7 @@ class PasswordManagerApp:
         self.password_entry = tk.Entry(input_frame, font=entry_font, width=40)
 
         tk.Label(input_frame, text="Category:", font=label_font).grid(row=3, column=0, sticky="e", padx=5, pady=5)
-        self.category_entry = ttk.Combobox(input_frame, values=["", "Work", "Personal", "Finance", "Social", "Email", "Other"], state="readonly", width=37)
+        self.category_entry = ttk.Combobox(input_frame, values=["", "Work", "Personal", "Finance", "Social", "Email", "School", "Other"], state="readonly", width=37)
         self.category_entry.grid(row=3, column=1, pady=5)
 
 
@@ -261,6 +261,7 @@ class PasswordManagerApp:
 
         self.password_entry.delete(0, tk.END)
         self.password_entry.insert(0, final_password)
+        self.check_password_strength()
 # ======== COPY USERNAME ========
     def copy_selected_username(self):
         import pyperclip

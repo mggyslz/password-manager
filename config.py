@@ -1,5 +1,6 @@
 from pathlib import Path
 from cryptography.fernet import Fernet
+PEPPER = b"your-static-pepper-value-here"  # 32+ byte secret (generate once)
 
 # ====== Use a local `.config` folder in your project directory ======
 config_dir = Path(__file__).resolve().parent / ".config"

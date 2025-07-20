@@ -2,18 +2,21 @@ from core import db_manager
 import os
 import hashlib
 import base64
+from config import PEPPER
 
 def hash_password(password, salt=None):
     if salt is None:
         salt = os.urandom(16)
-    key = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 100_000)
+    peppered_input = password.encode() + PEPPER
+    key = hashlib.pbkdf2_hmac("sha256", peppered_input, salt, 100_000)
     return base64.b64encode(salt + key).decode()
 
 def verify_password(password, stored_hash):
     raw = base64.b64decode(stored_hash.encode())
     salt = raw[:16]
     key = raw[16:]
-    new_key = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 100_000)
+    peppered_input = password.encode() + PEPPER
+    new_key = hashlib.pbkdf2_hmac("sha256", peppered_input, salt, 100_000)
     return new_key == key
 
 def is_master_set():
